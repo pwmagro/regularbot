@@ -8,6 +8,7 @@ import sqlite3
 from RegularBot.config import RegularBotConfig
 
 #I modified a file lmao -KT
+#I modified it even more xddddd
 
 class RegularBotClient(discord.Client):
     def __init__(self, intents: discord.Intents, cfg: RegularBotConfig, **options):
