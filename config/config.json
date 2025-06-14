@@ -1,0 +1,25 @@
+{
+  "sql_db": "regularbot.db",
+  "regular": {
+    "role_id": 0,
+    "message_threshold": 200,
+    "encouragement": "Nice work {user}, you've already sent {message_count} messages. You're halfway to a **Regular** role!",
+    "congrats": "Wow {user}, you've sent {message_count} messages already? You're clearly a **Regular** around here!",
+    "ignore_channels": [
+
+    ]
+  },
+  
+  "debug": {
+    "enabled": false,
+    "guild_id": 0,
+    "channel_id": 0
+  },
+
+  "emergency_notify_users": [
+    {
+      "name": "dummy",
+      "id": 0
+    }
+  ]
+}

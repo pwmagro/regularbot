@@ -1,0 +1,9 @@
+# period-prefixed files (except gitignore)
+.*
+!.gitignore
+
+# The user database
+*.db
+
+# Caches, obviously :)
+**/__pycache__
