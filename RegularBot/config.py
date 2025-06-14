@@ -20,10 +20,15 @@ class RegularBotConfig:
         object's elements appropriately
         """
 
+        # TODO check if the config.json actually exists, and if not, create a copy from local constants
+        #           Then, exit, since fields such as IDs need to be filled out
+
         with open(configPath, "r") as f:
             config = json.load(f)
+        
         if config:
             # TODO verify all expected settings are present before assigning (and nothing extra is there either)
+            # TODO validate the settings (check that all IDs are valid, for example)
             if config['debug']['enabled']:
                 print("Loaded config:")
                 print(config)

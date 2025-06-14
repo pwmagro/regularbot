@@ -7,3 +7,6 @@
 
 # Caches, obviously :)
 **/__pycache__
+
+# This file will be different from instance to instance
+config/config.json
