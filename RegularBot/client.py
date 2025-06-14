@@ -25,7 +25,7 @@ class RegularBotClient(discord.Client):
             cursor.execute("CREATE TABLE users(guild_id, user_id, message_count, encouraged, congratulated)")
 
     async def on_ready(self):
-        print('Logged in as {0}'.format(self.user))
+        print(f"Logged in as {self.user}")
 
     async def on_message(self, message: discord.Message):
         print("got message!")
@@ -87,7 +87,7 @@ class RegularBotClient(discord.Client):
                         reply = self.config['regular']['congrats']
                         reply = reply.format(user=author.display_name, message_count=message_count)
                     give_role = True
-                # Or, send a message if it's half of the indicated number (any they haven't gotten
+                # Or, send a message if it's half of the indicated number (and they haven't gotten
                 # a halfway message yet.)
                 elif (message_count < threshold) and (message_count >= (threshold / 2)) and (not encouraged):
                     reply = self.config['regular']['encouragement']

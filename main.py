@@ -30,7 +30,7 @@ class RegularBotWrapper:
     def __init__(self):
         # variable that says it's worth trying to reconnect to Discord
         # used by the main retry loop
-        # only mega fatal errors will change this value
+        # only fatal errors will change this value
         self.willing = True
 
     def load_env(self):
@@ -51,21 +51,16 @@ class RegularBotWrapper:
         self.config = RegularBotConfig("config/config.json")
 
         # Intents are basically bot features we can disable/enable.
-        # All we need for the Regular role is to know when a message
-        # has been sent.
+        # Default is fine.
         intents = discord.Intents.default()
         intents.guild_messages = True
         intents.members = True
         
         self.client = RegularBotClient(intents, self.config)
-        
-        # TODO need to grab API key(s) from .env file
         self.client.run(key)    
 
     def send_crash_notification(self, tb):
         """
-        TODO
-
         Log in to the bot account with a lightweight client and send a message to bot maintainer(s)
         indicating there was an error.
         Get the maintainers from a list in configs and PM them? Or just ping a role in a private channel?
@@ -80,7 +75,8 @@ class RegularBotWrapper:
         if not key:
             raise ValueError("REGBOT_DISCORD_OAUTH_TOKEN not found in env")
 
-        # No need for config here, and all intents for safety
+        # Grabbing all intents to minimize risk of failing here.
+        # This only runs for a few seconds, so it's fine
         intents = discord.Intents.all()
         config = RegularBotConfig("config/config.json")
         temp_client = RegularBotSafeClient(intents, config, tb)
