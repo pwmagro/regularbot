@@ -7,6 +7,8 @@ import asyncio
 import sqlite3
 from RegularBot.config import RegularBotConfig
 
+#I modified a file lmao -KT
+
 class RegularBotClient(discord.Client):
     def __init__(self, intents: discord.Intents, cfg: RegularBotConfig, **options):
         super().__init__(intents=intents, options=options)
