@@ -5,6 +5,7 @@ Discord client for RegularBot.
 import os
 import discord
 from discord.ext import tasks
+from discord import app_commands
 import asyncio
 import sqlite3
 from random import choice
@@ -14,7 +15,7 @@ class RegularBotClient(discord.Client):
     def __init__(self, intents: discord.Intents, **options):
         super().__init__(intents=intents, options=options)
         
-        self.config = RegularBotConfig('config/config.json')
+        self.refresh_config()
         self.sql_lock = asyncio.Lock()
 
         if not os.path.isdir("db"):
@@ -36,8 +37,6 @@ class RegularBotClient(discord.Client):
         self.regularbot_change_presence.start()
 
     async def on_message(self, message: discord.Message):
-        print("got message!")
-
         # Message info
         author = message.author
         channel = message.channel
@@ -47,10 +46,20 @@ class RegularBotClient(discord.Client):
         # Check if the guild config is present
         # TODO make it actually create a default config
         if not (guild_config := self.config['guilds'].get(guild_key)):
-            print(f"Guild {guild.id} not present in config file!")
+            raise ValueError(f"Guild {guild.id} not present in config file!")
 
         # Ignore bots
         if author.bot or author.system:
+            return
+
+        # Quick'n dirty way for global bot maintainers (and *only* them) to refresh the config
+        if str(author.id) in self.config['maintainers']    and \
+           message.content == ".rbRefresh"                 and \
+           guild.id    == self.config['debug']['guild_id'] and \
+           channel.id  == self.config['debug']['channel_id']:
+            print("refreshing config...")
+            self.refresh_config()
+            await message.reply("Refreshed config!")
             return
 
         # Ignore blacklisted channels
@@ -89,7 +98,6 @@ class RegularBotClient(discord.Client):
                     message_count = db_user[0] + 1
                     encouraged = db_user[1]
                     congratulated = db_user[2]
-                    print(f"user found. message_count={message_count}, encouraged={encouraged}, congratulated={congratulated}")
 
                 # If it's greater than the number indicated in config, give the role
                 threshold = guild_config['regular']['message_threshold']
@@ -132,23 +140,31 @@ class RegularBotClient(discord.Client):
             if role_snowflake:
                 await author.add_roles(role_snowflake)
             else:
-                print(f"Can't find role {role_id}")
-                print(f"Available roles: {[r for r in message.guild.roles]}")
+                raise ValueError(f"Can't find role {role_id}.\nAvailable roles: {[r for r in message.guild.roles]}")
 
-    @tasks.loop(hours=5)
+    @tasks.loop(hours=1)
     async def regularbot_change_presence(self):
         presences = self.config['presences']
 
-        activity_keys = [k for k in presences.keys()]
-        activity_type = choice(activity_keys)
-        activity = choice(presences[activity_type])
+        (activity_text, activity_type_str) = choice([(k,v) for k,v in presences.items()])
 
-        print(f"changing presence to {activity_type}: \"{activity}\"")
+        print(f"changing presence to {activity_type_str}: \"{activity_text}\"")
 
-        if activity_type == "playing":
-            game = discord.Game(activity)
-            await self.change_presence(status=discord.Status.online, activity=game)
-    
-    @tasks.loop(minutes=30)
-    async def refresh_config(self):
+        if activity_type_str == "playing":
+            activity_type = discord.ActivityType.playing
+        elif activity_type_str == "streaming":
+            activity_type = discord.ActivityType.streaming
+        elif activity_type_str == "listening":
+            activity_type = discord.ActivityType.listening
+        elif activity_type_str == "watching":
+            activity_type = discord.ActivityType.watching
+        else:
+            raise ValueError(f"unknown activity type {activity_type_str}")
+            return
+
+        activity = discord.Activity(name=activity_text, type=activity_type)
+
+        await self.change_presence(status=discord.Status.online, activity=activity)
+
+    def refresh_config(self):
         self.config = RegularBotConfig('config/config.json')

@@ -2,37 +2,27 @@
   "sql_db": "regularbot.db",
   "process_name": "regular_bot",
   "presences": {
-    "playing": [
-      "the lick",
-      "with your feelings",
-      "to win",
-      "the accordion",
-      "the game",
-      "hard to get",
-      "RAID: Shadow Legends",
-      "with fire",
-      "GTA VI",
-      "FarmVille",
-      "it by ear"
-    ]
+    "Minesweeper": "playing",
+    "the Billboard Top 50": "listening",
+    "YouTube": "watching"
   },
   "debug": {
     "enabled": false,
-    "guild_id": "debug_guild_id",
+    "guild_id": "<debug_guild_id>",
     "channel_id": "<debug_channel_id>"
   },
-  "emergency_notify_users": [
-    {
+  "maintainers": {
+    "<user_id>": {
       "name": "dummy",
-      "id": "<user_id>"
+      "notify_on_exception": true
     }
-  ],
+  },
 
   "guilds": {
     "<guild_id>": {
       "name": "dummy",
       "regular": {
-        "role_id": "regular_role_id",
+        "role_id": "<regular_role_id>",
         "message_threshold": 1000,
         "encouragement": "Nice work {user}, you've already sent {message_count} messages. You're halfway to a **Regular** role!",
         "congrats": "Wow {user}, you've sent {message_count} messages already? You're clearly a **Regular** around here!",

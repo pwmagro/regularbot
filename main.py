@@ -41,6 +41,7 @@ class RegularBotWrapper:
         # Default is fine.
         self.intents = discord.Intents.default()
         self.intents.guild_messages = True
+        self.intents.message_content = True
         self.intents.members = True
 
         # Build the client & grab config
