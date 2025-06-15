@@ -17,7 +17,7 @@ class RegularBotSafeClient(discord.Client):
         try:
             print('Logged in as {0}'.format(self.user))
 
-            message_text = f"The bot encountered a fatal error with the following details, but is trying to recover: \n ```{'\n'.join(self.tb)}```"
+            message_text = f"The bot encountered a fatal error with the following details: \n ```{'\n'.join(self.tb)}```"
             for user_info in self.config['emergency_notify_users']:
                 user_id = user_info["id"]
                 print(user_id)

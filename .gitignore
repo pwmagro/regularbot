@@ -2,11 +2,14 @@
 .*
 !.gitignore
 
-# The user database
-*.db
+# The user database(s)
+db/
 
 # Caches, obviously :)
 **/__pycache__
 
 # This file will be different from instance to instance
 config/config.json
+
+# logs
+out/

@@ -1,25 +1,45 @@
 {
   "sql_db": "regularbot.db",
-  "regular": {
-    "role_id": 0,
-    "message_threshold": 200,
-    "encouragement": "Nice work {user}, you've already sent {message_count} messages. You're halfway to a **Regular** role!",
-    "congrats": "Wow {user}, you've sent {message_count} messages already? You're clearly a **Regular** around here!",
-    "ignore_channels": [
-
+  "process_name": "regular_bot",
+  "presences": {
+    "playing": [
+      "the lick",
+      "with your feelings",
+      "to win",
+      "the accordion",
+      "the game",
+      "hard to get",
+      "RAID: Shadow Legends",
+      "with fire",
+      "GTA VI",
+      "FarmVille",
+      "it by ear"
     ]
   },
-  
   "debug": {
     "enabled": false,
-    "guild_id": 0,
-    "channel_id": 0
+    "guild_id": "debug_guild_id",
+    "channel_id": "<debug_channel_id>"
   },
-
   "emergency_notify_users": [
     {
       "name": "dummy",
-      "id": 0
+      "id": "<user_id>"
     }
-  ]
+  ],
+
+  "guilds": {
+    "<guild_id>": {
+      "name": "dummy",
+      "regular": {
+        "role_id": "regular_role_id",
+        "message_threshold": 1000,
+        "encouragement": "Nice work {user}, you've already sent {message_count} messages. You're halfway to a **Regular** role!",
+        "congrats": "Wow {user}, you've sent {message_count} messages already? You're clearly a **Regular** around here!",
+        "ignore_channels": [
+
+        ]
+      }
+    }
+  }
 }

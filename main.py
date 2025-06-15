@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 ###############################
 # Imports
 ###############################
@@ -9,6 +11,8 @@ from RegularBot.config import RegularBotConfig
 from RegularBot.client import RegularBotClient
 from RegularBot.safe_client import RegularBotSafeClient
 from dotenv import load_dotenv
+import socket
+import time
 
 ###############################
 # Top level constants
@@ -33,6 +37,16 @@ class RegularBotWrapper:
         # only fatal errors will change this value
         self.willing = True
 
+        # Intents are basically bot features we can disable/enable.
+        # Default is fine.
+        self.intents = discord.Intents.default()
+        self.intents.guild_messages = True
+        self.intents.members = True
+
+        # Build the client & grab config
+        self.client = RegularBotClient(self.intents)
+        self.config = self.client.config
+
     def load_env(self):
         # Load environment file
         env_path = os.path.abspath(ENV_FILE)
@@ -46,17 +60,7 @@ class RegularBotWrapper:
         key = os.getenv("REGBOT_DISCORD_OAUTH_TOKEN")
         if not key:
             raise ValueError("REGBOT_DISCORD_OAUTH_TOKEN not found in env")
-
-        # Load the config
-        self.config = RegularBotConfig("config/config.json")
-
-        # Intents are basically bot features we can disable/enable.
-        # Default is fine.
-        intents = discord.Intents.default()
-        intents.guild_messages = True
-        intents.members = True
         
-        self.client = RegularBotClient(intents, self.config)
         self.client.run(key)    
 
     def send_crash_notification(self, tb):
@@ -75,17 +79,37 @@ class RegularBotWrapper:
         if not key:
             raise ValueError("REGBOT_DISCORD_OAUTH_TOKEN not found in env")
 
-        # Grabbing all intents to minimize risk of failing here.
-        # This only runs for a few seconds, so it's fine
-        intents = discord.Intents.all()
-        config = RegularBotConfig("config/config.json")
-        temp_client = RegularBotSafeClient(intents, config, tb)
+        temp_client = RegularBotSafeClient(self.intents, self.config, tb)
         temp_client.run(key)
 
+    def get_lock(self):
+        # Binding the lock reference to the function itself so it doesn't get
+        # garbage collected so long as the wrapper exists
+        self._lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
 
-if __name__ == "__main__":
-    
+        process_name = self.config['process_name']
+
+        try:
+            # The null byte (\0) means the socket is created 
+            # in the abstract namespace instead of being created 
+            # on the file system itself.
+            # Works only in Linux
+            self._lock_socket.bind('\0' + process_name)
+            return True
+        except socket.error:
+            print(f"{process_name} already running, exit")
+            return False
+
+
+if __name__ == "__main__":\
+    # Create bot
     w = RegularBotWrapper()
+    
+    # Check if the bot is already running in another process, and if so, exit
+    if not w.get_lock():
+        print("Already running in another process")
+        exit(0)
+    
     signal.signal(signal.SIGINT, interrupt_handler)
     
     reboots = 0

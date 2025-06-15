@@ -39,4 +39,3 @@ class RegularBotConfig:
     
     def __getitem__(self, key):
         return self.settings.__getitem__(key)
-

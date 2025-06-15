@@ -2,19 +2,26 @@
 Discord client for RegularBot.
 """
 
+import os
 import discord
+from discord.ext import tasks
 import asyncio
 import sqlite3
+from random import choice
 from RegularBot.config import RegularBotConfig
 
 class RegularBotClient(discord.Client):
-    def __init__(self, intents: discord.Intents, cfg: RegularBotConfig, **options):
+    def __init__(self, intents: discord.Intents, **options):
         super().__init__(intents=intents, options=options)
         
-        self.config = cfg
+        self.config = RegularBotConfig('config/config.json')
         self.sql_lock = asyncio.Lock()
 
-        conn = sqlite3.connect("db/"+self.config['sql_db'])
+        if not os.path.isdir("db"):
+            os.mkdir("db")
+
+        db_name = "db/"+self.config['sql_db']
+        conn = sqlite3.connect(db_name)
         cursor = conn.cursor()
         
         # check if the user table exists
@@ -26,6 +33,7 @@ class RegularBotClient(discord.Client):
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
+        self.regularbot_change_presence.start()
 
     async def on_message(self, message: discord.Message):
         print("got message!")
@@ -34,17 +42,23 @@ class RegularBotClient(discord.Client):
         author = message.author
         channel = message.channel
         guild = message.guild
+        guild_key = str(guild.id)
+        
+        # Check if the guild config is present
+        # TODO make it actually create a default config
+        if not (guild_config := self.config['guilds'].get(guild_key)):
+            print(f"Guild {guild.id} not present in config file!")
 
         # Ignore bots
         if author.bot or author.system:
             return
 
         # Ignore blacklisted channels
-        if channel.id in self.config['regular']['ignore_channels']:
+        if channel.id in guild_config['regular']['ignore_channels']:
             return
 
         # Quit early if user already has the role
-        if author.get_role(self.config['regular']['role_id']):
+        if author.get_role(guild_config['regular']['role_id']):
             return
         
         # Need these variables outside of the `async with` scope
@@ -78,19 +92,20 @@ class RegularBotClient(discord.Client):
                     print(f"user found. message_count={message_count}, encouraged={encouraged}, congratulated={congratulated}")
 
                 # If it's greater than the number indicated in config, give the role
-                threshold = self.config['regular']['message_threshold']
+                threshold = guild_config['regular']['message_threshold']
                 if (message_count >= threshold):
                     # only send the message if they haven't gotten it already
                     # if the message was sent before but role assignment failed for some reason,
                     # this stops us from spamming the user while still reattempting role assignment
                     if not congratulated:
-                        reply = self.config['regular']['congrats']
+                        reply = guild_config['regular']['congrats']
                         reply = reply.format(user=author.display_name, message_count=message_count)
+                        cursor.execute(f"UPDATE users SET congratulated = {True} WHERE user_id={author.id}")
                     give_role = True
                 # Or, send a message if it's half of the indicated number (and they haven't gotten
                 # a halfway message yet.)
                 elif (message_count < threshold) and (message_count >= (threshold / 2)) and (not encouraged):
-                    reply = self.config['regular']['encouragement']
+                    reply = guild_config['regular']['encouragement']
                     reply = reply.format(user=author.display_name, message_count=message_count)
                     cursor.execute(f"UPDATE users SET encouraged = {True} WHERE user_id={author.id}")
                 # Finally, log the rest of the messages, if debug is enabled.
@@ -112,10 +127,28 @@ class RegularBotClient(discord.Client):
 
         # attempt to give the role
         if give_role:
-            role_id = self.config['regular']['role_id']
+            role_id = guild_config['regular']['role_id']
             role_snowflake = guild.get_role(role_id)
             if role_snowflake:
                 await author.add_roles(role_snowflake)
             else:
                 print(f"Can't find role {role_id}")
                 print(f"Available roles: {[r for r in message.guild.roles]}")
+
+    @tasks.loop(hours=5)
+    async def regularbot_change_presence(self):
+        presences = self.config['presences']
+
+        activity_keys = [k for k in presences.keys()]
+        activity_type = choice(activity_keys)
+        activity = choice(presences[activity_type])
+
+        print(f"changing presence to {activity_type}: \"{activity}\"")
+
+        if activity_type == "playing":
+            game = discord.Game(activity)
+            await self.change_presence(status=discord.Status.online, activity=game)
+    
+    @tasks.loop(minutes=30)
+    async def refresh_config(self):
+        self.config = RegularBotConfig('config/config.json')
