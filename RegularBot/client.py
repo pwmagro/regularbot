@@ -24,8 +24,10 @@ class RegularBotException(Exception):
         loop.create_task(bot.send_exception_msg(self))
 
 class RegularBotClient(discord.Client):
+    command_tree: app_commands.CommandTree
+
     def __init__(self, intents: discord.Intents, **options):
-        super().__init__(intents=intents, options=options)
+        super().__init__(intents=intents, options=options, command_prefix="alwdnma8j2n298ucnjaw")
         
         self.refresh_config()
         self.sql_lock = asyncio.Lock()
@@ -43,9 +45,13 @@ class RegularBotClient(discord.Client):
         if not user_table:
             print("need to create user_table")
             cursor.execute("CREATE TABLE users(guild_id, user_id, message_count, encouraged, congratulated)")
+        
+        self.command_tree = app_commands.CommandTree(self)
+        self.register_commands()
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
+        await self.command_tree.sync()
         self.regularbot_change_presence.start()
 
     async def on_message(self, message: discord.Message):
@@ -67,22 +73,6 @@ class RegularBotClient(discord.Client):
         # Ignore bots
         if author.bot or author.system:
             return
-
-        # Quick'n dirty way for global bot maintainers (and *only* them) to refresh the config
-        if str(author.id) in self.config['maintainers']    and \
-           message.content == ".rbRefresh"                 and \
-           guild.id    == self.config['debug']['guild_id'] and \
-           channel.id  == self.config['debug']['channel_id']:
-            print("refreshing config...")
-            self.refresh_config()
-            await message.reply("Refreshed config!")
-            return
-
-        # TODO
-        # add a command to check how far away someone is from reaching regular
-
-        # TODO
-        # add a command to edit config
 
         # Ignore blacklisted channels
         if channel.id in guild_config['regular']['ignore_channels']:
@@ -210,3 +200,67 @@ class RegularBotClient(discord.Client):
             
             if user.dm_channel:
                 await user.dm_channel.send(message_text)
+
+    def register_commands(self):
+
+        @self.command_tree.command(name="rbconfig", description="ONLY bot maintainers (not server admins) can execute this command_2")
+        @app_commands.guilds(discord.Object(self.config['debug']['guild_id']))
+        async def command_config(ctx):
+
+            maintainers = [int(id) for id in self.config['maintainers']]
+            if ctx.user not in maintainers:
+                await ctx.response.send_message("This is an internal command, and can only be used by bot maintainers. It is not meant to be used by server admins.")
+
+            # Quick'n dirty way for global bot maintainers (and *only* them) to refresh the config
+            print("refreshing config...")
+            self.refresh_config()
+            await ctx.response.send_message("Refreshed config!")
+            return
+
+        @self.command_tree.command(name="rbhowfar", description="Check how far you are from reaching Regular status")
+        async def command_howfar(ctx):
+            user = ctx.user
+            guild = ctx.guild
+            
+            guild_key = str(guild.id)
+            
+            # Check if the guild config is present
+            # TODO make it actually create a default config
+            if not (guild_config := self.config['guilds'].get(guild_key)):
+                raise RegularBotException(self, f"Guild {guild.id} not present in config file!")
+
+            if user.bot or user.system:
+                return
+            
+            if user.get_role(guild_config['regular']['role_id']):
+                await ctx.response.send_message(f"{user.name}, you're already a Regular here!")
+                return
+
+            async with self.sql_lock:
+                try:
+                    # load up the database
+                    conn = sqlite3.connect("db/"+self.config['sql_db'])
+                    cursor = conn.cursor()
+
+                    # Get user's message count, creating a new row in the table if necessary.
+                    res = cursor.execute(f"SELECT message_count FROM users WHERE user_id={user.id} AND guild_id={guild.id}")
+                    message_count = res.fetchone()[0]
+                finally:
+                    cursor.close()
+            
+            if not message_count:
+                await ctx.response.send_message(f"{user.name}, I've never seen you send a message here!")
+                return
+            else:
+                threshold = guild_config['regular']['message_threshold']
+
+                # handle the case where the user has sent more messages than required, but they don't have the role. This might happen if the role assignment failed.
+                if message_count >= threshold:
+                    await ctx.response.send_message(f"{user.name}, you've already hit the message count needed to be a Regular, but you don't have the role yet. Something might have gone wrong when I tried to give you the role, but don't worry - I'll try again next time you send a message!")
+                    return
+
+                await ctx.response.send_message(f"{user.name}, you've sent {message_count} messages since I joined the server. That means you've got {threshold - message_count} messages to go. Keep it up!")
+                return
+
+        # TODO
+        # add a command to edit config
