@@ -27,7 +27,7 @@ class RegularBotClient(discord.Client):
     command_tree: app_commands.CommandTree
 
     def __init__(self, intents: discord.Intents, **options):
-        super().__init__(intents=intents, options=options, command_prefix="alwdnma8j2n298ucnjaw")
+        super().__init__(intents=intents, options=options)
         
         self.refresh_config()
         self.sql_lock = asyncio.Lock()
@@ -182,7 +182,6 @@ class RegularBotClient(discord.Client):
         self.config = RegularBotConfig('config/config.json')
 
     async def send_exception_msg(self, exc):
-        print("send_exception_msg()")
         traceback_fmt = traceback.format_exception(exc)
         message_text = f"The bot encountered a fatal error with the following details: \n ```{'\n'.join(traceback_fmt)}```"
         for id, info in self.config['maintainers'].items():
@@ -191,7 +190,6 @@ class RegularBotClient(discord.Client):
                 continue
             
             user_id = int(id)
-            print(user_id)
             user = self.get_user(user_id)
             
             if not user.dm_channel:
