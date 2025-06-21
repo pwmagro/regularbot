@@ -98,7 +98,6 @@ class RegularBotWrapper:
             self._lock_socket.bind('\0' + process_name)
             return True
         except socket.error:
-            print(f"{process_name} already running, exit")
             return False
 
 
@@ -108,7 +107,6 @@ if __name__ == "__main__":\
     
     # Check if the bot is already running in another process, and if so, exit
     if not w.get_lock():
-        print("Already running in another process")
         exit(0)
     
     signal.signal(signal.SIGINT, interrupt_handler)

@@ -10,6 +10,18 @@ import asyncio
 import sqlite3
 from random import choice
 from RegularBot.config import RegularBotConfig
+import traceback
+
+class RegularBotException(Exception):
+    """
+    Exception class which sends emergency message to maintainers upon creation
+    """
+
+    def __init__(self, bot, msg):
+        super().__init__(msg)
+        print("RegularBotException raised")
+        loop = asyncio.get_running_loop()
+        loop.create_task(bot.send_exception_msg(self))
 
 class RegularBotClient(discord.Client):
     def __init__(self, intents: discord.Intents, **options):
@@ -40,13 +52,17 @@ class RegularBotClient(discord.Client):
         # Message info
         author = message.author
         channel = message.channel
+
+        if type(channel) == discord.DMChannel:
+            return
+
         guild = message.guild
         guild_key = str(guild.id)
         
         # Check if the guild config is present
         # TODO make it actually create a default config
         if not (guild_config := self.config['guilds'].get(guild_key)):
-            raise ValueError(f"Guild {guild.id} not present in config file!")
+            raise RegularBotException(self, f"Guild {guild.id} not present in config file!")
 
         # Ignore bots
         if author.bot or author.system:
@@ -61,6 +77,12 @@ class RegularBotClient(discord.Client):
             self.refresh_config()
             await message.reply("Refreshed config!")
             return
+
+        # TODO
+        # add a command to check how far away someone is from reaching regular
+
+        # TODO
+        # add a command to edit config
 
         # Ignore blacklisted channels
         if channel.id in guild_config['regular']['ignore_channels']:
@@ -108,21 +130,21 @@ class RegularBotClient(discord.Client):
                     if not congratulated:
                         reply = guild_config['regular']['congrats']
                         reply = reply.format(user=author.display_name, message_count=message_count)
-                        cursor.execute(f"UPDATE users SET congratulated = {True} WHERE user_id={author.id}")
+                        cursor.execute(f"UPDATE users SET congratulated = {True} WHERE user_id={author.id} AND guild_id={guild.id}")
                     give_role = True
                 # Or, send a message if it's half of the indicated number (and they haven't gotten
                 # a halfway message yet.)
                 elif (message_count < threshold) and (message_count >= (threshold / 2)) and (not encouraged):
                     reply = guild_config['regular']['encouragement']
                     reply = reply.format(user=author.display_name, message_count=message_count)
-                    cursor.execute(f"UPDATE users SET encouraged = {True} WHERE user_id={author.id}")
+                    cursor.execute(f"UPDATE users SET encouraged = {True} WHERE user_id={author.id} AND guild_id={guild.id}")
                 # Finally, log the rest of the messages, if debug is enabled.
                 elif self.config['debug']['enabled'] and (channel.id == self.config['debug']['channel_id']):
                     print(f"Received message from {author.display_name} in guild {guild.id}, channel {channel.id}")
                     print(f"According to the database, in this guild, user {author.id} has sent **{message_count} messages** and **{"HAS" if encouraged else "HAS NOT"}** received their halfway encouragement message")
 
                 # Increment the message count
-                cursor.execute(f"UPDATE users SET message_count = {message_count} WHERE user_id={author.id}")
+                cursor.execute(f"UPDATE users SET message_count = {message_count} WHERE user_id={author.id} AND guild_id={guild.id}")
             
             finally:
                 # Write out the database
@@ -140,7 +162,7 @@ class RegularBotClient(discord.Client):
             if role_snowflake:
                 await author.add_roles(role_snowflake)
             else:
-                raise ValueError(f"Can't find role {role_id}.\nAvailable roles: {[r for r in message.guild.roles]}")
+                raise RegularBotException(self, f"Can't find role {role_id}.\nAvailable roles: {[r for r in message.guild.roles]}")
 
     @tasks.loop(hours=1)
     async def regularbot_change_presence(self):
@@ -159,7 +181,7 @@ class RegularBotClient(discord.Client):
         elif activity_type_str == "watching":
             activity_type = discord.ActivityType.watching
         else:
-            raise ValueError(f"unknown activity type {activity_type_str}")
+            raise RegularBotException(self, f"unknown activity type {activity_type_str}")
             return
 
         activity = discord.Activity(name=activity_text, type=activity_type)
@@ -168,3 +190,23 @@ class RegularBotClient(discord.Client):
 
     def refresh_config(self):
         self.config = RegularBotConfig('config/config.json')
+
+    async def send_exception_msg(self, exc):
+        print("send_exception_msg()")
+        traceback_fmt = traceback.format_exception(exc)
+        message_text = f"The bot encountered a fatal error with the following details: \n ```{'\n'.join(traceback_fmt)}```"
+        for id, info in self.config['maintainers'].items():
+
+            if not info['notify_on_exception']:
+                continue
+            
+            user_id = int(id)
+            print(user_id)
+            user = self.get_user(user_id)
+            
+            if not user.dm_channel:
+                print("creating dm...")
+                await user.create_dm()
+            
+            if user.dm_channel:
+                await user.dm_channel.send(message_text)
