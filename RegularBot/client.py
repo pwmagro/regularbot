@@ -206,7 +206,7 @@ class RegularBotClient(discord.Client):
         async def command_config(ctx):
 
             maintainers = [int(id) for id in self.config['maintainers']]
-            if ctx.user not in maintainers:
+            if ctx.user.id not in maintainers:
                 await ctx.response.send_message("This is an internal command, and can only be used by bot maintainers. It is not meant to be used by server admins.")
 
             # Quick'n dirty way for global bot maintainers (and *only* them) to refresh the config
@@ -231,7 +231,7 @@ class RegularBotClient(discord.Client):
                 return
             
             if user.get_role(guild_config['regular']['role_id']):
-                await ctx.response.send_message(f"{user.name}, you're already a Regular here!")
+                await ctx.response.send_message(f"{user.display_name}, you're already a Regular here!")
                 return
 
             async with self.sql_lock:
@@ -247,17 +247,17 @@ class RegularBotClient(discord.Client):
                     cursor.close()
             
             if not message_count:
-                await ctx.response.send_message(f"{user.name}, I've never seen you send a message here!")
+                await ctx.response.send_message(f"{user.display_name}, I've never seen you send a message here!")
                 return
             else:
                 threshold = guild_config['regular']['message_threshold']
 
                 # handle the case where the user has sent more messages than required, but they don't have the role. This might happen if the role assignment failed.
                 if message_count >= threshold:
-                    await ctx.response.send_message(f"{user.name}, you've already hit the message count needed to be a Regular, but you don't have the role yet. Something might have gone wrong when I tried to give you the role, but don't worry - I'll try again next time you send a message!")
+                    await ctx.response.send_message(f"{user.display_name}, you've already hit the message count needed to be a Regular, but you don't have the role yet. Something might have gone wrong when I tried to give you the role, but don't worry - I'll try again next time you send a message!")
                     return
 
-                await ctx.response.send_message(f"{user.name}, you've sent {message_count} messages since I joined the server. That means you've got {threshold - message_count} messages to go. Keep it up!")
+                await ctx.response.send_message(f"{user.display_name}, you've sent {message_count} messages since I joined the server. That means you've got {threshold - message_count} messages to go. Keep it up!")
                 return
 
         # TODO
