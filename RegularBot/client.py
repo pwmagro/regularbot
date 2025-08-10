@@ -11,6 +11,10 @@ import sqlite3
 from random import choice
 from RegularBot.config import RegularBotConfig
 import traceback
+import re
+from datetime import datetime, time
+# import pytz
+from zoneinfo import ZoneInfo
 
 class RegularBotException(Exception):
     """
@@ -45,6 +49,13 @@ class RegularBotClient(discord.Client):
         if not user_table:
             print("need to create user_table")
             cursor.execute("CREATE TABLE users(guild_id, user_id, message_count, encouraged, congratulated)")
+        
+        # check if the timezone table exists
+        res = cursor.execute("SELECT name FROM sqlite_master WHERE name='timezones'")
+        tz_table = res.fetchone()
+        if not tz_table:
+            print("need to create tz_table")
+            cursor.execute("CREATE TABLE timezones(user_id, timezone)")
         
         self.command_tree = app_commands.CommandTree(self)
         self.register_commands()
@@ -259,6 +270,108 @@ class RegularBotClient(discord.Client):
 
                 await ctx.response.send_message(f"{user.display_name}, you've sent {message_count} messages since I joined the server. That means you've got {threshold - message_count} messages to go. Keep it up!")
                 return
+
+        @self.command_tree.command(name="rbtimestamp", description="Generate a dynamic timestamp (accepts 12 or 24 hour time)")
+        async def command_timestamp(ctx, timestamp: str, timezone: str=None):
+            timestamp_cleaned = timestamp.strip()
+
+            # matches timestamps of the form H:MM or HH:MM, 24-hour or 12-hour, with or without a space between the time and AM/PM
+            timestamp_re = re.search(r"^(((([01]?\d)|2[0-3])(:(([0-5]\d)|60))?)|(((0?\d)|1[0-2])(:(([0-5]\d)))?( ?[AP]M)?))$", timestamp, re.IGNORECASE)
+            if not timestamp_re:
+                # send a private error message
+                pass
+            
+            # if no timezone provided use that user's default
+            if timezone:
+                timezone_cleaned = timezone.strip()
+            else:
+                async with self.sql_lock:
+                    try:
+                        # load up the database
+                        conn = sqlite3.connect("db/"+self.config['sql_db'])
+                        cursor = conn.cursor()
+                        
+                        author = ctx.user
+
+                        # Create a new row in the timezone table if necessary.
+                        res = cursor.execute(f"SELECT timezone FROM timezones WHERE user_id={author.id}")
+                        db_user = res.fetchone()
+
+                        if db_user:
+                            timezone_cleaned = db_user[0].strip()
+                        else:
+                            await ctx.response.send_message(f"Couldn't find a timezone to use! Include the `timezone` parameter in your command, or run /rbtimezone to set your preferred default timezone", ephemeral=True)
+                            return
+                    finally:
+                        cursor.close()
+
+            if not re.match(r"^[A-Z][a-z]+\/[A-Z]+[a-z]+(_[A-Z][a-z]+)*$", timezone_cleaned):
+                await ctx.response.send_message(f"{timezone_cleaned} is not a valid timezone! Please enter timezones in `Region/City` format. You can get your timezone from this site: https://zones.arilyn.cc/", ephemeral=True)
+                return
+
+            try:
+                tz = ZoneInfo(timezone_cleaned)
+            except:
+                await ctx.response.send_message(f"{timezone_cleaned} is not a valid timezone! Please enter timezones in `Region/City` format. You can get your timezone from this site: https://zones.arilyn.cc/", ephemeral=True)
+                return
+
+            # is it AM/PM format?
+            is_12hour = timestamp_cleaned[-1] in ['m', 'M']
+            if is_12hour:
+                ampm = timestamp_cleaned[-2:]
+                timestamp_cleaned = timestamp_cleaned[:-2].strip()
+                timestamp_split = timestamp_cleaned.split(':')
+                hour = timestamp_split[0]
+                minute = timestamp_split[1] if len(timestamp_split) == 2 else "0"
+                hour = int(hour)
+                minute = int(minute)
+                if ampm[0] in ['p', 'P']:
+                    hour += 12
+            else:
+                timestamp_split = timestamp_cleaned.split(':')
+                hour = timestamp_split[0]
+                minute = timestamp_split[1] if len(timestamp_split) == 2 else "0"
+                hour = int(hour)
+                minute = int(minute)
+
+            stamp = datetime.now(tz).replace(hour=hour, minute=minute, second=0)
+            await ctx.response.send_message(f"Copy and paste this text to send a dynamic timestamp for {tz}::{str(hour).zfill(2)}:{str(minute).zfill(2)}: `<t:{int(stamp.timestamp())}:t>`", ephemeral=True)
+
+        @self.command_tree.command(name="rbtimezone", description="Set your default timezone to use with /rbtimestamp (you can find yours at https://zones.arilyn.cc/)")
+        async def command_timezone(ctx, timezone: str):
+            timezone_cleaned = timezone.strip()
+            if not re.match(r"^[A-Z][a-z]+\/[A-Z]+[a-z]+(_[A-Z][a-z]+)*$", timezone_cleaned):
+                await ctx.response.send_message(f"{timezone_cleaned} is not a valid timezone! Please enter timezones in `Region/City` format. You can get your timezone from this site: https://zones.arilyn.cc/", ephemeral=True)
+                return
+
+            try:
+                tz = ZoneInfo(timezone_cleaned)
+            except:
+                await ctx.response.send_message(f"{timezone_cleaned} is not a valid timezone! Please enter timezones in `Region/City` format. You can get your timezone from this site: https://zones.arilyn.cc/", ephemeral=True)
+                return
+
+            async with self.sql_lock:
+                try:
+                    # load up the database
+                    conn = sqlite3.connect("db/"+self.config['sql_db'])
+                    cursor = conn.cursor()
+                    
+                    author = ctx.user
+
+                    # Create a new row in the timezone table if necessary.
+                    res = cursor.execute(f"SELECT timezone FROM timezones WHERE user_id={author.id}")
+                    db_user = res.fetchone()
+                    if not db_user:
+                        print("user not found, insert into table")
+                        cursor.execute(f"INSERT INTO timezones VALUES ({author.id}, \"Etc/UTC\")")
+
+                    # Get user's message count, creating a new row in the table if necessary.
+                    res = cursor.execute(f"UPDATE timezones SET timezone=\"{timezone_cleaned}\" WHERE user_id={author.id}")
+
+                    await ctx.response.send_message(f"Set your default timezone to {timezone_cleaned}", ephemeral=True)
+                finally:
+                    conn.commit()
+                    conn.close()
 
         # TODO
         # add a command to edit config
